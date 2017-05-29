@@ -1,0 +1,274 @@
+<!DOCTYPE HTML>
+<html manifest="" lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title>Contacts</title>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/extjs/4.2.1/resources/css/ext-all.css">
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/extjs/4.2.1/ext-all.js"></script>
+    <script type="text/javascript">
+    	Ext.onReady(function(){
+    		Ext.define('User',{
+		        extend: 'Ext.data.Model',
+		        proxy: {
+		            type: 'ajax'
+		        },
+		        fields: [
+		        	{name: '_id',  type: 'string'}, 
+		        	{name: 'name',  type: 'string'}
+		        ]
+		    });
+		    Ext.define('Contact',{
+		        extend: 'Ext.data.Model',
+		        proxy: {
+		            type: 'ajax'
+		        },
+		        fields: [
+		        	{name: '_id',  type: 'string'}, 
+		        	{name: 'name',  type: 'string'},
+		        	{name: 'phone',  type: 'string'}
+		        ]
+		    });
+		    var userEditing = Ext.create('Ext.grid.plugin.RowEditing', {
+		        listeners: {
+		            cancelEdit: function(rowEditing, context) {
+		                // Canceling editing of a locally added, unsaved record: remove it
+		                if (context.record.get('_id') === '') {
+		                    context.grid.getStore().remove(context.record);
+		                }
+		            }
+		        }
+		    });
+		    var contactEditing = Ext.create('Ext.grid.plugin.RowEditing', {
+		        listeners: {
+		            cancelEdit: function(rowEditing, context) {
+		                // Canceling editing of a locally added, unsaved record: remove it
+		                if (context.record.get('_id') === '') {
+		                    context.grid.getStore().remove(context.record);
+		                }
+		            }
+		        }
+		    });
+
+		     var panel = Ext.create('Ext.panel.Panel', {
+		    	layout: 'hbox',
+		    	renderTo:'contacts',
+		    	items: [{
+		    		xtype: 'grid',
+		    		plugins: [userEditing],
+		    		itemId: 'usersGrid',
+		    		title: 'Usuarios',
+		    		store: Ext.create('Ext.data.Store', {
+				        model: 'User'
+				    }),
+			        columns: [{
+			        	text: "Nombre", 
+			        	flex: 1, 
+			        	dataIndex: 'name',
+			        	editor: {
+			        		xtype: 'textfield'
+			        	}
+			        }],
+			        flex: 1,
+			        height: 200,
+			        dockedItems: [{
+		                xtype: 'toolbar',
+		                dock: 'top',
+		                items: ['->', {
+		                    text: 'Agregar',
+		                    scope: this,
+		                    handler: function (btn) {
+		                    	var usersStore = btn.up('#usersGrid').getStore();
+		                    	usersStore.insert(0, {});
+                    			userEditing.startEdit(0, 0);
+		                    }
+		                }, {
+		                    text: 'Eliminar',
+		                    scope: this,
+		                    handler: function (btn) {
+		                    	var grid = btn.up('#usersGrid'),
+		                    		records = grid.getSelectionModel().getSelection(),
+		                    		record;
+
+		                    	if (records.length > 0) {
+		                    		record = records[0];
+		                    		Ext.Ajax.request({
+									    url: 'users/' + record.get('_id'),
+									    method: 'delete',
+									    success: function(response){
+									        Ext.Ajax.request({
+											    url: 'users',
+											    success: function(response){
+											        var text = response.responseText,
+											        	users = Ext.decode(text),
+											        	usersStore = panel.down('#usersGrid').getStore();
+
+											        usersStore.loadData(users);
+											    }
+											});
+									    }
+									});
+		                    	} else {
+		                    		Ext.Msg.alert('Aviso', 'Se debe de seleccionar un usuario');
+		                    	}
+		                    }
+		                }]
+		            }],
+		            listeners: {
+		            	edit: function(editor, e, eOpts) {
+		            		var method = 'post',
+		            			url = 'users';
+		            		if (e.record.get('_id') !== '') {
+		            			method = 'put';
+		            			url += '/' + e.record.get('_id');
+		            		}
+		            		Ext.Ajax.request({
+							    url: url,
+							    method: method,
+							    params: {name: e.record.get('name')},
+							    success: function(response){
+							        Ext.Ajax.request({
+									    url: 'users',
+									    success: function(response){
+									        var text = response.responseText,
+									        	users = Ext.decode(text),
+									        	usersStore = panel.down('#usersGrid').getStore();
+
+									        usersStore.loadData(users);
+									    }
+									});
+							    }
+							});
+		            	},
+		            	select: function (rowModel, record, index) {
+
+		            		Ext.Ajax.request({
+							    url: 'users/' + record.get('_id') + '/contacts',
+							    success: function(response){
+							        var text = response.responseText,
+							        	contacts = Ext.decode(text),
+							        	contactsStore = panel.down('#contactsGrid').getStore();
+
+							        contactsStore.loadData(contacts);
+							    }
+							});
+		            	}
+		            }
+		    	}, {
+		    		xtype: 'grid',
+		    		plugins: [contactEditing],
+		    		itemId: 'contactsGrid',
+		    		title: 'Contactos',
+		    		store: Ext.create('Ext.data.Store', {
+				        model: 'Contact'
+				    }),
+			        columns: [
+			            {text: "Nombre", flex: 1, dataIndex: 'name',
+			        	editor: {
+			        		xtype: 'textfield'
+			        	}},
+			            {text: "Tel&eacute;fono", flex: 1, dataIndex: 'phone',
+			        	editor: {
+			        		xtype: 'textfield'
+			        	}}
+			        ],
+			        flex: 1,
+			        height: 200,
+			        dockedItems: [{
+		                xtype: 'toolbar',
+		                dock: 'top',
+		                items: ['->', {
+		                    text: 'Agregar',
+		                    scope: this,
+		                    handler: function (btn) {
+		                    	var contactsStore = btn.up('#contactsGrid').getStore();
+		                    	contactsStore.insert(0, {});
+                    			contactEditing.startEdit(0, 0);
+		                    }
+		                }, {
+		                    text: 'Eliminar',
+		                    scope: this,
+		                    handler: function (btn) {
+		                    	var contactsGrid = btn.up('#contactsGrid'),
+		                    		usersGrid = contactsGrid.up('panel').down('#usersGrid'),
+		                    		usersRecords = usersGrid.getSelectionModel().getSelection(),
+		                    		contactsRecords = contactsGrid.getSelectionModel().getSelection(),
+		                    		userRecord, contactRecord;
+
+		                    	if (usersRecords.length > 0) {
+		                    		userRecord = usersRecords[0];
+		                    		if (contactsRecords.length > 0) {
+		                    			contactRecord = contactsRecords[0];
+		                    			Ext.Ajax.request({
+										    url: 'users/' + userRecord.get('_id') + '/contacts/' + contactRecord.get('_id'),
+										    method: 'delete',
+										    success: function(response){
+										        Ext.Ajax.request({
+												    url: 'users/' + userRecord.get('_id') + '/contacts',
+												    success: function(response){
+												        var text = response.responseText,
+												        	contacts = Ext.decode(text),
+												        	contactsStore = panel.down('#contactsGrid').getStore();
+
+												        contactsStore.loadData(contacts);
+												    }
+												});
+										    }
+										});
+		                    		} else {
+		                    			Ext.Msg.alert('Aviso', 'Se debe de seleccionar un contacto');
+		                    		}
+		                    	} else {
+		                    		Ext.Msg.alert('Aviso', 'Se debe de seleccionar un usuario');
+		                    	}
+		                    }
+		                }]
+		            }],
+		            listeners: {
+		            	edit: function(editor, e, eOpts) {
+		            		var usersGrid = e.grid.up('panel').down('#usersGrid'),
+		            			userRecord = usersGrid.getSelectionModel().getSelection()[0];
+		            			method = 'post',
+		            			url = 'users/' + userRecord.get('_id') + '/contacts';
+		            		if (e.record.get('_id') !== '') {
+		            			method = 'put';
+		            			url += '/' + e.record.get('_id');
+		            		}
+		            		Ext.Ajax.request({
+							    url: url,
+							    method: method,
+							    params: {name: e.record.get('name'), phone: e.record.get('phone')},
+							    success: function(response){
+							        Ext.Ajax.request({
+									    url: 'users/' + userRecord.get('_id') + '/contacts',
+									    success: function(response){
+									        var text = response.responseText,
+									        	contacts = Ext.decode(text),
+									        	contactsStore = panel.down('#contactsGrid').getStore();
+
+									        contactsStore.loadData(contacts);
+									    }
+									});
+							    }
+							});
+		            	}
+		            }
+		    	}]
+		    });
+
+		    Ext.Ajax.request({
+			    url: 'users',
+			    success: function(response){
+			        var text = response.responseText,
+			        	users = Ext.decode(text),
+			        	usersStore = panel.down('#usersGrid').getStore();
+
+			        usersStore.loadData(users);
+			    }
+			});
+    	});
+    </script>
+</head>
+<body>
+	<div id="contacts"></div>
+</body>
+</html>
